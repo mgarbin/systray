@@ -975,14 +975,104 @@ func setInternalLoop(bool) {
 func iconBytesToFilePath(iconBytes []byte) (string, error) {
 	bh := md5.Sum(iconBytes)
 	dataHash := hex.EncodeToString(bh[:])
-	iconFilePath := filepath.Join(os.TempDir(), "systray_temp_icon_"+dataHash)
+	iconFilePath := filepath.Join(os.TempDir(), "systray_temp_icon_"+dataHash+".ico")
 
 	if _, err := os.Stat(iconFilePath); os.IsNotExist(err) {
-		if err := ioutil.WriteFile(iconFilePath, iconBytes, 0644); err != nil {
+		icoBytes, err := ensureICO(iconBytes)
+		if err != nil {
+			return "", err
+		}
+		if err := ioutil.WriteFile(iconFilePath, icoBytes, 0644); err != nil {
 			return "", err
 		}
 	}
 	return iconFilePath, nil
+}
+
+// ensureICO wraps PNG bytes in an ICO container if needed.
+// If the bytes are already ICO format, they are returned as-is.
+func ensureICO(data []byte) ([]byte, error) {
+	// ICO files start with 00 00 01 00
+	if len(data) >= 4 && data[0] == 0 && data[1] == 0 && data[2] == 1 && data[3] == 0 {
+		return data, nil
+	}
+
+	// PNG files start with 89 50 4E 47
+	if len(data) >= 4 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
+		return pngToICO(data)
+	}
+
+	// Unknown format, return as-is and hope for the best
+	return data, nil
+}
+
+// pngToICO wraps PNG data in a minimal ICO container.
+// The ICO format can embed PNG data directly (Vista+ feature).
+func pngToICO(pngData []byte) ([]byte, error) {
+	// Parse PNG to get dimensions
+	width, height := pngDimensions(pngData)
+
+	// ICO header: 6 bytes
+	// ICO dir entry: 16 bytes
+	// Then the PNG data
+	headerSize := 6 + 16
+	ico := make([]byte, headerSize+len(pngData))
+
+	// ICONDIR header
+	ico[0] = 0 // reserved
+	ico[1] = 0 // reserved
+	ico[2] = 1 // type: 1 = ICO
+	ico[3] = 0
+	ico[4] = 1 // count: 1 image
+	ico[5] = 0
+
+	// ICONDIRENTRY
+	if width >= 256 {
+		ico[6] = 0 // 0 means 256
+	} else {
+		ico[6] = byte(width)
+	}
+	if height >= 256 {
+		ico[7] = 0
+	} else {
+		ico[7] = byte(height)
+	}
+	ico[8] = 0  // color palette count
+	ico[9] = 0  // reserved
+	ico[10] = 1 // color planes
+	ico[11] = 0
+	ico[12] = 32 // bits per pixel
+	ico[13] = 0
+
+	// Size of image data (4 bytes, little-endian)
+	size := uint32(len(pngData))
+	ico[14] = byte(size)
+	ico[15] = byte(size >> 8)
+	ico[16] = byte(size >> 16)
+	ico[17] = byte(size >> 24)
+
+	// Offset to image data (4 bytes, little-endian)
+	offset := uint32(headerSize)
+	ico[18] = byte(offset)
+	ico[19] = byte(offset >> 8)
+	ico[20] = byte(offset >> 16)
+	ico[21] = byte(offset >> 24)
+
+	// Copy PNG data
+	copy(ico[headerSize:], pngData)
+
+	return ico, nil
+}
+
+// pngDimensions reads width and height from a PNG header.
+// PNG stores dimensions at bytes 16-23 as big-endian uint32s.
+func pngDimensions(data []byte) (int, int) {
+	if len(data) < 24 {
+		return 0, 0
+	}
+	w := int(data[16])<<24 | int(data[17])<<16 | int(data[18])<<8 | int(data[19])
+	h := int(data[20])<<24 | int(data[21])<<16 | int(data[22])<<8 | int(data[23])
+	return w, h
 }
 
 // SetIcon sets the systray icon.
