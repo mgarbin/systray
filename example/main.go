@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/Shabbar10/systray"
-	"github.com/Shabbar10/systray/icon"
+	"github.com/mgarbin/systray"
+	"github.com/mgarbin/systray/icon"
 	"io/ioutil"
 	"os"
 	"path/filepath"

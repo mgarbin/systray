@@ -9,7 +9,7 @@ import (
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/prop"
 
-	"github.com/Shabbar10/systray/internal/generated/menu"
+	"github.com/mgarbin/systray/internal/generated/menu"
 )
 
 // SetIcon sets the icon of a menu item.
