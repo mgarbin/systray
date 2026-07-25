@@ -116,14 +116,26 @@ func (t *tray) EventGroup(events []struct {
 	return
 }
 
-// AboutToShow is com.canonical.dbusmenu.AboutToShow method.
+// AboutToShow is com.canonical.dbusmenu.AboutToShow method. Many dbusmenu
+// hosts (KDE Plasma, GNOME AppIndicator/libdbusmenu-glib, ...) only
+// refetch the layout right before displaying the menu - i.e. exactly
+// when this is called - rather than reactively tracking every
+// LayoutUpdated signal while the menu is hidden. This package doesn't
+// track a per-item dirty flag, so needUpdate must always be true:
+// hardcoding false here (as a previous version did) told hosts "your
+// cached layout is still current" even when SetTitle/SetTooltip/
+// Enable/Disable/Check/Uncheck had changed it since the menu last
+// opened, which left stale items (e.g. a menu item that should have
+// become enabled) visibly wrong until the whole app restarted.
 func (t *tray) AboutToShow(id int32) (needUpdate bool, err *dbus.Error) {
-	return
+	return true, nil
 }
 
-// AboutToShowGroup is com.canonical.dbusmenu.AboutToShowGroup method.
+// AboutToShowGroup is com.canonical.dbusmenu.AboutToShowGroup method. See
+// AboutToShow: every queried id is reported as needing an update for the
+// same reason.
 func (t *tray) AboutToShowGroup(ids []int32) (updatesNeeded []int32, idErrors []int32, err *dbus.Error) {
-	return
+	return ids, nil, nil
 }
 
 func createMenuPropSpec() map[string]map[string]*prop.Prop {
